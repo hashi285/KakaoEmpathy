@@ -89,8 +89,8 @@ def generate_reply_for_me(
 2. 결과 형식: 답장 후보 5개를 제안할 것.
 """
 
-
+def main():
+    mcp.run(transport="streamable-http")
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:handler", host="0.0.0.0", port=8000, reload=True)
+    main()
