@@ -1,13 +1,11 @@
 import json
 import re
 from mcp.server.fastmcp import FastMCP
-
-import parrot_data
 from mangum import Mangum
+import parrot_data
 
-
+# 1. FastMCP 초기화
 mcp = FastMCP("KakaoEmpathy")
-
 
 @mcp.resource("parrot://style_guide")
 def get_style_guide() -> str:
@@ -31,9 +29,7 @@ def generate_reply_for_me(
         my_name: str,
         relationship: str = "자동 분석"
 ) -> str:
-    """
-    사용자의 실제 말투를 분석하여 답장 후보를 생성합니다.
-    """
+    """사용자의 실제 말투를 분석하여 답장 후보를 생성합니다."""
     if not my_name:
         return "본인의 이름(my_name)을 입력해야 말투 분석이 가능합니다."
 
@@ -95,6 +91,15 @@ def generate_reply_for_me(
 </Instructions>
 """
 
-# 2. AWS Lambda용 핸들러 (Mangum)
-# mcp 객체 자체를 전달하는 것이 가장 안전합니다.
-handler = Mangum(app=mcp.streamable_http_app())
+# ---------------------------------------------------------
+# 2. AWS Lambda 배포용 핵심 설정
+# lifespan="off"는 람다에서 발생하는 초기화 에러를 방지합니다.
+# ---------------------------------------------------------
+handler = Mangum(mcp, lifespan="off")
+
+# 3. 로컬 테스트용 실행부
+if __name__ == "__main__":
+    import uvicorn
+    # 로컬에서는 uvicorn을 통해 handler를 실행합니다.
+    # 실행 명령어: python main.py
+    uvicorn.run("main:handler", host="127.0.0.1", port=8000, reload=True)
