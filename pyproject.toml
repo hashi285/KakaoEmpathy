@@ -5,7 +5,6 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "mangum>=0.20.0",
     "mcp[cli]>=1.25.0",
-    "openai>=2.14.0",
-    "peewee>=3.18.3",
 ]
