@@ -31,6 +31,7 @@ def set_my_name(name: str) -> str:
 
 @mcp.tool()
 def generate_reply_for_me(chat_logs: str, target_person: str, user_intent: str) -> str:
+    """채팅 내역을 분석을 하고, 사용자의 실제 대화 습관을 분석하여 가장 자연스러운 답장을 생성합니다."""
     my_name = user_identity.get("me")
     if not my_name:
         return "먼저 본인이 누구인지 설정해주세요 (set_my_name 도구 사용)."
@@ -85,50 +86,11 @@ def generate_reply_for_me(chat_logs: str, target_person: str, user_intent: str) 
 1. **샘플 우선 원칙**: 샘플에 나타난 말투(존댓말/반말 여부, 마침표 사용 습관, 초성 빈도)를 100% 반영해.
 2. **관계 기반 생성**: 상대방과의 현재 관계(예의 바른 관계인지, 편한 관계인지)를 고려하여 적절한 어휘를 선택해.
 3. **가이드라인 활용**: 샘플이 부족할 경우에만 [말투 DNA 가이드라인]의 어휘를 적절히 섞어줘.
-4. **결과**: '나의 의도'를 전달하는 답장 후보 5개를 제안해.
-"""
 
-
-@mcp.tool()
-def review_conversation(chat_logs: str, target_person: str) -> str:
-    """
-    대화 내용을 분석하여 현재 관계와 대화의 흐름을 리뷰합니다.
-    """
-    my_name = user_identity.get("me")
-    if not my_name:
-        return "먼저 본인이 누구인지 설정해주세요 (set_my_name 도구 사용)."
-
-    # 데이터 파싱 로직 (기존과 동일)
-    parsed_data = []
-    pattern = r"\[(.*?)\] \[(.*?)\] (.*)"
-    for line in chat_logs.strip().split('\n'):
-        match = re.match(pattern, line)
-        if match:
-            sender, _, message = match.groups()
-            parsed_data.append({"sender": sender, "message": message})
-
-    # 특정 상대와의 대화만 필터링 (최근 30개)
-    relevant_chat = [d for d in parsed_data if d['sender'] in [my_name, target_person]][-30:]
-
-    chat_text = "\n".join([f"{d['sender']}: {d['message']}" for d in relevant_chat])
-
-    return f"""
-너는 전문적인 대화 분석가이자 커뮤니케이션 코치야. 
-'{my_name}'님과 '{target_person}'님의 대화 내용을 바탕으로 관계의 상태를 진단해줘.
-
-**[분석할 대화 내용]**
-{chat_text}
-
-**분석 요청 사항:**
-1. **대화 분위기**: 현재 대화의 온도는 어떤가요? (친밀함, 냉랭함, 사무적, 급함 등)
-2. **권력 균형**: 누가 대화를 주도하고 있나요? (질문을 많이 하는 쪽, 답장이 짧은 쪽 등)
-3. **특이 사항**: 대화 중 오해의 소지가 있거나 감정적인 변화가 포착된 지점이 있나요?
-4. **관계 꿀팁**: 이 관계를 더 발전시키거나 유지하기 위해 '{my_name}'님이 신경 써야 할 점은 무엇인가요?
-
-**답변 형식:**
-- 요약: 
-- 상세 분석 (분위기/주도권/이슈):
-- 향후 대화 가이드라인:
+4. **결과**:
+ 1. 대화내용을 분석하여 [말투 DNA 가이드라인]중 어떤 카테고리에 들어가는지 출력해.
+ 2. 상세 분석 (분위기/주도권/이슈)를 요약해서 출력을 해.
+ 3.'나의 의도'를 전달하는 답장 후보 5개를 제안해.
 """
 
 def main():
