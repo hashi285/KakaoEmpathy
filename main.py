@@ -127,5 +127,3 @@ STEP 2: [답장 후보]
 """
 
 
-# ★ ASGI 앱 노출 (uvicorn용)
-app = mcp.app
