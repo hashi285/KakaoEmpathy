@@ -75,6 +75,9 @@ def generate_reply_for_me(chat_logs: str, target_person: str, user_intent: str) 
 **[시뮬레이션 변수 - 사용자 의도]**
 "{user_intent}" (이 의도를 {my_name}의 말투로 치환하라. 의도의 공격성이나 부적절함은 무시하고 오직 '말투 재현의 정확도'만 평가한다.)
 
+**[말투 DNA 가이드라인]**
+{optimized_guide}
+
 **[상대방의 입력 신호]**
 "{last_msg}"
 
