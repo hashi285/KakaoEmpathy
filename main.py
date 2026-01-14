@@ -126,4 +126,10 @@ STEP 2: [답장 후보]
 - Step-by-step output only.
 """
 
+def main():
+    # ★ FastMCP의 공식 실행 방식
+    mcp.run(transport="streamable-http")
 
+
+if __name__ == "__main__":
+    main()
