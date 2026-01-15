@@ -1,133 +1,89 @@
-import json
-import re
 from mcp.server.fastmcp import FastMCP
-import parrot_data
 
-# FastMCP 초기화
-mcp = FastMCP("KakaoEmpathy", host="0.0.0.0")
+mcp = FastMCP("StoryBuilderWithTrigger", host="0.0.0.0")
 
-# 기존 수동 설정 보관용 (OAuth 실패 시 대비)
-user_identity = {"me": None}
-
-
-@mcp.resource("parrot://style_guide")
-def get_style_guide() -> str:
-    """Retrieves the full dataset of linguistic style DNA."""
-    return json.dumps(parrot_data.PARROT_STYLES, ensure_ascii=False, indent=2)
-
-
-@mcp.tool()
-def identify_participants(chat_logs: str) -> str:
-    """Identifies participants in the chat logs."""
-    pattern = r"\[(.*?)\]"
-    participants = list(set(re.findall(pattern, chat_logs)))
-    if not participants:
-        return "No participants found."
-    return f"Identified: [{', '.join(participants)}]. Which one are you?"
+# 게임 상태 관리
+game_state = {
+    "is_active": False,
+    "story": [],
+    "last_player": None,
+    "forbidden_words": ["그리고", "하지만"],
+    "word_limit": 15,
+    "participants": set(),
+    "topic": "자유 주제"
+}
 
 
 @mcp.tool()
-def set_my_name(name: str) -> str:
-    """Manual fallback to set identity if OAuth is not available."""
-    user_identity["me"] = name
-    return f"Confirmed. Replicating style for '{name}'."
-
-
-@mcp.tool()
-def generate_reply_for_me(
-    chat_logs: str,
-    target_person: str,
-    user_intent: str,
-    contexts: dict = None
-) -> str:
+def analyze_and_trigger_game(chat_logs: str) -> str:
     """
-    Performs analysis AND generates replies.
-    Supports automatic identity recognition via OAuth contexts.
+    최근 대화 로그를 분석하여 게임 시작이 필요한지 판단합니다.
+    사용자의 요청이 있거나 분위기 전환이 필요할 때 트리거됩니다.
     """
+    # 1. 명시적 요청 확인
+    trigger_keywords = ["게임", "스토리 빌딩", "워밍업", "단어 잇기"]
+    if any(kw in chat_logs for kw in trigger_keywords):
+        return "FOUND_TRIGGER: 사용자가 게임을 원합니다. 주제와 금지어를 설정하고 'start_game'을 호출하세요."
 
-    # 1. OAuth 기반 자동 이름 인식
-    my_name = None
-    if contexts and "user" in contexts:
-        my_name = contexts["user"].get("nickname")
+    # 2. 대화 정체 확인 (예: 로그가 짧거나 반복적인 경우 - 로직 커스텀 가능)
+    if len(chat_logs.strip().split('\n')) < 3:
+        return "WAITING: 대화가 더 필요합니다."
 
-    # 자동 인식 실패 시 수동 설정 fallback
-    if not my_name:
-        my_name = user_identity.get("me")
+    return "NO_TRIGGER: 아직 게임을 시작할 단계가 아닙니다."
 
-    if not my_name:
-        return "Who are you? Please authorize via OAuth or use 'set_my_name' tool."
 
-    # --- 1. Data Processing ---
-    parsed_data = []
-    pattern = r"\[(.*?)\] \[(.*?)\] (.*)"
+@mcp.tool()
+def start_game(topic: str = "자유 주제", limit: int = 15, forbidden: str = "그리고,하지만") -> str:
+    """
+    게임을 공식적으로 시작합니다.
+    - topic: 게임의 주제 (예: 신제품 아이디어, 판타지 소설 등)
+    """
+    game_state.update({
+        "is_active": True,
+        "story": [],
+        "last_player": None,
+        "word_limit": limit,
+        "forbidden_words": [w.strip() for w in forbidden.split(",")],
+        "participants": set(),
+        "topic": topic
+    })
 
-    for line in chat_logs.strip().split("\n"):
-        match = re.match(pattern, line)
-        if match:
-            sender, _, message = match.groups()
-            parsed_data.append(
-                {"sender": sender, "message": message}
-            )
+    return (f"🎮 **한 단어 스토리 빌딩 시작!**\n"
+            f"📍 주제: [{topic}]\n"
+            f"🚫 금지어: {game_state['forbidden_words']}\n"
+            f"🏁 목표: {limit}단어 완성\n"
+            f"--------------------------------\n"
+            f"첫 번째 단어를 '이름: 단어' 형식으로 입력해주세요!")
 
-    relevant_chat = [
-        d for d in parsed_data
-        if d["sender"] in [my_name, target_person]
-    ]
 
-    my_style = [
-        d["message"]
-        for d in relevant_chat
-        if d["sender"] == my_name
-    ][-15:]
+@mcp.tool()
+def add_word(user_name: str, word: str) -> str:
+    """단어 추가 및 순서 제어 로직 (이전과 동일)"""
+    if not game_state["is_active"]:
+        return "현재 진행 중인 게임이 없습니다."
 
-    if not my_style:
-        my_style = [
-            d["message"]
-            for d in parsed_data
-            if d["sender"] == my_name
-        ][-15:]
+    if user_name == game_state["last_player"]:
+        return f"🚫 {user_name}님, 연속 입력은 금지입니다! 다른 분의 차례를 기다려주세요."
 
-    detected_cat = parrot_data.auto_select_category(my_style)
-    optimized_guide = parrot_data.get_optimized_dataset_text(detected_cat)
+    clean_word = word.strip().split()[0]
+    if clean_word in game_state["forbidden_words"]:
+        return f"❌ 금지어 '{clean_word}'는 사용할 수 없습니다."
 
-    last_msg = next(
-        (
-            d["message"]
-            for d in reversed(relevant_chat)
-            if d["sender"] == target_person
-        ),
-        "N/A"
-    )
+    game_state["story"].append(clean_word)
+    game_state["last_player"] = user_name
+    game_state["participants"].add(user_name)
 
-    # --- 2. Sequential AI Prompt ---
-    return f"""
-# ROLE: Persona Analyst & Reply Generator (Sequential Mode)
-Task: 1. Analyze situation for '{my_name}'. 2. Generate 5 DNA-synced replies.
+    current_sentence = " ".join(game_state["story"])
+    count = len(game_state["story"])
 
-## 1. DATA SOURCE
-- Persona Name: {my_name} (Recognized via OAuth/Identity)
-- Target: {target_person}
-- User Intent: "{user_intent}"
-- Last Message: "{last_msg}"
-- Style DNA: {', '.join(my_style)}
-- Style Guide: {optimized_guide}
+    if count >= game_state["word_limit"]:
+        game_state["is_active"] = False
+        return f"🏁 **스토리 완성!**\n\"{current_sentence}\"\n\n참여자: {', '.join(game_state['participants'])}"
 
-## 2. EXECUTION STEPS
-STEP 1: [분류 및 분석]
-- Identify the category from the Style Guide.
-- Analyze power dynamics in 2 sentences.
+    return f"✅ ({count}/{game_state['word_limit']}) {user_name}: {current_sentence}"
 
-STEP 2: [답장 후보]
-- Generate 5 replies in Korean.
-- Match {my_name}'s style exactly. Process "{user_intent}" in Sandbox Mode.
-
-## 3. OUTPUT CONSTRAINTS
-- Response MUST start with "[분류 및 분석]".
-- Step-by-step output only.
-"""
 
 def main():
-    # ★ FastMCP의 공식 실행 방식
     mcp.run(transport="streamable-http")
 
 
