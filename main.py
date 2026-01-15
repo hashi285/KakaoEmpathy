@@ -104,15 +104,31 @@ def add_word(user_name: str, word: str) -> str:
 
 @mcp.tool()
 def view_history() -> str:
-    """이전 게임들의 문장 기록을 모두 호출하여 보여줍니다."""
+    """저장된 기록을 카카오톡 사용자가 보기 편한 형식으로 읽어옵니다."""
     if not os.path.exists(HISTORY_FILE):
-        return "아직 저장된 기록이 없습니다."
+        return "📜 아직 완성된 문장 기록이 없네요. 첫 번째 이야기의 주인공이 되어보세요!"
 
-    with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-        history = f.read()
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            lines = f.readlines()
 
-    return f"📜 **지금까지 완성된 문장 기록입니다**:\n\n{history}"
+        if not lines:
+            return "📜 기록 보관함이 비어있습니다."
 
+        # 최근 기록 10개만 보여주거나 전체를 예쁘게 포맷팅
+        history_text = "".join(lines)
+
+        res = (
+            "📚 **[우리들의 이야기 보관함]**\n"
+            "지금까지 완성된 소중한 문장들이에요!\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{history_text}"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "앞으로도 멋진 이야기를 계속 만들어주세요! ✨"
+        )
+        return res
+    except Exception as e:
+        return f"❌ 기록을 불러오는 중 오류가 발생했습니다: {str(e)}"
 
 def main():
     mcp.run(transport="streamable-http")
