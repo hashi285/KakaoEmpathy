@@ -1,3 +1,4 @@
+import json
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("KakaoEmpathy", host="0.0.0.0")
@@ -15,29 +16,61 @@ game_state = {
 
 
 @mcp.tool()
+def get_game_info() -> str:
+    """게임의 규칙과 참여 방법을 상세히 설명합니다."""
+    guide = (
+        "📖 **한 단어 스토리 빌딩 게임 가이드**\n\n"
+        "1. **방식**: 참가자들이 돌아가며 **단어 하나씩**만 말해 하나의 문장을 만듭니다.\n"
+        "2. **규칙**: 문법이 조금 깨져도 멈추지 않고 이어가는 것이 포인트!\n"
+        "3. **제한**: 지정된 '금지어'는 사용할 수 없으며, 같은 사람이 연속으로 단어를 던질 수 없습니다.\n"
+        "4. **참여 방법**: `이름: 단어` 형식으로 메시지를 남기면 AI가 기록합니다.\n"
+        "   *(예: [철수] 옛날, [영희] 호랑이가, [철수] 담배를...)*\n\n"
+        "아이디어 워밍업이나 팀 빌딩에 아주 효과적이에요! 시작하려면 '게임 시작하자'라고 말해보세요."
+    )
+    return guide
+
+
+@mcp.tool()
+def get_current_board() -> str:
+    """현재까지 만들어진 문장과 게임 진행 상황을 시각화하여 보여줍니다."""
+    if not game_state["is_active"] and not game_state["story"]:
+        return "현재 진행 중인 게임이 없습니다. `start_game`으로 시작해보세요!"
+
+    story_text = " ".join(game_state["story"]) if game_state["story"] else "(아직 시작 전)"
+    progress_bar = "▓" * len(game_state["story"]) + "░" * (game_state["word_limit"] - len(game_state["story"]))
+
+    status = "🎮 **STORY BUILDING BOARD**\n"
+    status += f"━━━━━━━━━━━━━━━━━━━━━━\n"
+    status += f"📍 **주제**: {game_state['topic']}\n"
+    status += f"📝 **문장**: {story_text}\n"
+    status += f"📊 **진행**: {progress_bar} ({len(game_state['story'])}/{game_state['word_limit']})\n"
+    status += f"🚫 **금지**: {', '.join(game_state['forbidden_words'])}\n"
+    status += f"👤 **마지막 발화자**: {game_state['last_player'] if game_state['last_player'] else '없음'}\n"
+    status += f"━━━━━━━━━━━━━━━━━━━━━━\n"
+
+    if game_state["is_active"]:
+        status += "👉 다음 단어를 던져주세요!"
+    else:
+        status += "🏁 게임이 종료되었습니다."
+
+    return status
+
+
+@mcp.tool()
 def analyze_and_trigger_game(chat_logs: str) -> str:
-    """
-    최근 대화 로그를 분석하여 게임 시작이 필요한지 판단합니다.
-    사용자의 요청이 있거나 분위기 전환이 필요할 때 트리거됩니다.
-    """
-    # 1. 명시적 요청 확인
-    trigger_keywords = ["게임", "스토리 빌딩", "워밍업", "단어 잇기"]
+    """로그 분석 후 게임을 제안하거나 가이드를 출력합니다."""
+    trigger_keywords = ["게임", "스토리 빌딩", "워밍업", "단어 잇기", "심심해"]
+
     if any(kw in chat_logs for kw in trigger_keywords):
-        return "FOUND_TRIGGER: 사용자가 게임을 원합니다. 주제와 금지어를 설정하고 'start_game'을 호출하세요."
+        # 단순히 게임 요청이 오면 가이드를 먼저 보여주도록 AI에게 지시
+        return "ACTION: 'get_game_info'를 호출하여 게임을 설명하고, 주제를 제안받아 'start_game'을 진행하세요."
 
-    # 2. 대화 정체 확인 (예: 로그가 짧거나 반복적인 경우 - 로직 커스텀 가능)
-    if len(chat_logs.strip().split('\n')) < 3:
-        return "WAITING: 대화가 더 필요합니다."
-
-    return "NO_TRIGGER: 아직 게임을 시작할 단계가 아닙니다."
+    return "NO_TRIGGER"
 
 
 @mcp.tool()
 def start_game(topic: str = "자유 주제", limit: int = 15, forbidden: str = "그리고,하지만") -> str:
-    """
-    게임을 공식적으로 시작합니다.
-    - topic: 게임의 주제 (예: 신제품 아이디어, 판타지 소설 등)
-    """
+    """게임을 공식적으로 시작하고 현황판을 출력합니다."""
     game_state.update({
         "is_active": True,
         "story": [],
@@ -48,39 +81,28 @@ def start_game(topic: str = "자유 주제", limit: int = 15, forbidden: str = "
         "topic": topic
     })
 
-    return (f"🎮 **한 단어 스토리 빌딩 시작!**\n"
-            f"📍 주제: [{topic}]\n"
-            f"🚫 금지어: {game_state['forbidden_words']}\n"
-            f"🏁 목표: {limit}단어 완성\n"
-            f"--------------------------------\n"
-            f"첫 번째 단어를 '이름: 단어' 형식으로 입력해주세요!")
+    return f"🚀 게임이 생성되었습니다!\n\n{get_current_board()}"
 
 
 @mcp.tool()
 def add_word(user_name: str, word: str) -> str:
-    """단어 추가 및 순서 제어 로직 (이전과 동일)"""
+    """단어를 추가하고 즉시 업데이트된 현황판을 보여줍니다."""
     if not game_state["is_active"]:
-        return "현재 진행 중인 게임이 없습니다."
+        return "게임이 활성화되어 있지 않습니다."
 
     if user_name == game_state["last_player"]:
-        return f"🚫 {user_name}님, 연속 입력은 금지입니다! 다른 분의 차례를 기다려주세요."
+        return f"🚫 **{user_name}**님은 방금 입력하셨습니다! 다른 분의 순서를 기다려주세요."
 
     clean_word = word.strip().split()[0]
     if clean_word in game_state["forbidden_words"]:
-        return f"❌ 금지어 '{clean_word}'는 사용할 수 없습니다."
+        return f"❌ 금지어 **'{clean_word}'**는 사용할 수 없습니다! 다른 단어를 생각해보세요."
 
     game_state["story"].append(clean_word)
     game_state["last_player"] = user_name
     game_state["participants"].add(user_name)
 
-    current_sentence = " ".join(game_state["story"])
-    count = len(game_state["story"])
-
-    if count >= game_state["word_limit"]:
-        game_state["is_active"] = False
-        return f"🏁 **스토리 완성!**\n\"{current_sentence}\"\n\n참여자: {', '.join(game_state['participants'])}"
-
-    return f"✅ ({count}/{game_state['word_limit']}) {user_name}: {current_sentence}"
+    # 단어를 추가할 때마다 보드를 새로 보여줌
+    return get_current_board()
 
 
 def main():
