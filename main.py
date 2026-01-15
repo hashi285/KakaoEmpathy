@@ -1,6 +1,6 @@
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("StoryBuilderWithTrigger", host="0.0.0.0")
+mcp = FastMCP("KakaoEmpathy", host="0.0.0.0")
 
 # 게임 상태 관리
 game_state = {
