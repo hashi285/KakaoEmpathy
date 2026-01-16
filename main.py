@@ -23,12 +23,12 @@ def save_game_result():
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         final_sentence = " ".join(game_state["story"])
         participants_list = ", ".join(list(game_state["participants"]))
-        # 파일 저장 형식을 고정 (나중에 읽기 편하도록)
+        # 파일에 저장되는 형식을 아래와 같이 고정합니다.
         entry = (
             f"📅 [{timestamp}] 게임 {game_state['current_game_count']}회차\n"
-            f"📝 문장: {final_sentence}\n"
-            f"👥 참여: {participants_list}\n"
-            f"{'━' * 20}\n"
+            f"📝 완성 문장: {final_sentence}\n"
+            f"👥 참여 인원: {participants_list}\n"
+            f"{'━' * 30}\n"
         )
         with open(HISTORY_FILE, "a", encoding="utf-8") as f:
             f.write(entry)
@@ -38,31 +38,19 @@ def save_game_result():
 
 
 @mcp.tool()
-def start_story_game() -> str:
-    """메인 메뉴 안내"""
-    return (
-        "반가워요! 우리 같이 이야기를 만들어볼까요? 😊\n\n"
-        "1️⃣ **새 이야기 시작**: 처음부터 새로 시작해요.\n"
-        "2️⃣ **직전 문장 잇기**: 가장 최근 이야기를 불러와요.\n"
-        "3️⃣ **과거 기록 선택**: '기록 보여줘'라고 해서 번호를 골라보세요!\n\n"
-        f"💡 최근 문장: \"{game_state['last_sentence']}\"\n"
-        "어떤 방식으로 시작할까요?"
-    )
-
-
-@mcp.tool()
 def start_game_with_history(game_round: int) -> str:
-    """회차 기록을 더 정확하게 찾아 게임을 시작합니다."""
+    """특정 회차의 기록을 정확히 찾아 게임을 시작합니다."""
     try:
         if not os.path.exists(HISTORY_FILE):
-            return "아직 저장된 기록이 없어요. 새 게임을 먼저 시작해보세요!"
+            return "아직 저장된 기록 파일이 없어요."
 
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # [수정 포인트] 정규표현식을 더 유연하게 변경 (공백이나 특수기호에 유연함)
-        # 게임 N회차 이후 문장: 부분을 찾아 그 뒷내용을 추출
-        pattern = rf"게임 {game_round}회차.*?📝 문장:\s*(.*?)\n"
+        # [수정된 정규표현식]
+        # 1. '게임 N회차' 문자열을 찾습니다.
+        # 2. 그 뒤에 나오는 '완성 문장:' 뒷부분을 추출합니다.
+        pattern = rf"게임 {game_round}회차.*?완성 문장:\s*(.*?)\n"
         match = re.search(pattern, content, re.DOTALL)
 
         if match:
@@ -70,20 +58,31 @@ def start_game_with_history(game_round: int) -> str:
             game_state["is_active"] = True
             game_state["story"] = [saved_sentence]
             game_state["participants"] = set()
-            return f"📂 {game_round}회차 기록을 성공적으로 가져왔어요!\n\n\"{saved_sentence}\"\n\n이 뒤를 이어서 이야기를 완성해주세요! ✨"
+            return f"📂 {game_round}회차 기록을 불러왔어요!\n\n\"{saved_sentence}\"\n\n이어서 이야기를 만들어주세요! 😊"
 
-        return f"죄송해요, {game_round}회차 기록은 아직 보관함에 없는 것 같아요. 번호를 다시 확인해주시겠어요?"
+        return f"죄송해요, {game_round}회차 기록을 찾을 수 없어요. (파일 내용을 확인해보니 번호가 일치하지 않거나 형식이 다를 수 있어요.)"
     except Exception as e:
         return f"기록을 읽는 도중 오류가 발생했어요: {str(e)}"
 
 
 @mcp.tool()
-def add_word(user_name: str, word: str) -> str:
-    """단어를 추가하고 기록"""
-    if not game_state["is_active"]:
-        return "진행 중인 게임이 없어요. '시작'을 먼저 말해주세요!"
+def start_story_game() -> str:
+    """게임 참여 방식 안내"""
+    return (
+        "반가워요! 우리 같이 이야기를 만들어볼까요? 😊\n\n"
+        "1️⃣ **새 이야기 시작**: '옛날 아주 먼 옛날,'부터 시작합니다.\n"
+        "2️⃣ **직전 문장 이어서 하기**\n"
+        "3️⃣ **과거 기록 불러오기**: 회차 번호를 말씀해주세요.\n\n"
+        f"📊 시즌 진행도: {game_state['current_game_count']}/{GAME_LIMIT}\n"
+        "어떤 방식으로 시작할까요?"
+    )
 
-    # 금지어 체크
+
+@mcp.tool()
+def add_word(user_name: str, word: str) -> str:
+    if not game_state["is_active"]:
+        return "진행 중인 게임이 없어요. 먼저 시작을 요청해주세요!"
+
     if any(f in word for f in game_state["forbidden_words"]):
         return "앗! 금지어가 포함되어 있네요. 다시 입력해주세요!"
 
@@ -95,12 +94,11 @@ def add_word(user_name: str, word: str) -> str:
     save_game_result()
     game_state["is_active"] = False
 
-    return f"🏁 **문장 완성!**\n\n📝 \"{final_sentence}\"\n\n잘 저장되었습니다! 이어서 하거나 새로 시작해보세요. 😊"
+    return f"🏁 **문장 완성!**\n\n\"{final_sentence}\"\n\n기록 보관함에 잘 저장했습니다. 다음 게임을 시작해보세요! ✨"
 
 
 @mcp.tool()
 def view_history() -> str:
-    """기록 보기"""
     if not os.path.exists(HISTORY_FILE): return "아직 저장된 이야기가 없어요."
     with open(HISTORY_FILE, "r", encoding="utf-8") as f:
         history = f.read()
