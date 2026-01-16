@@ -82,12 +82,12 @@ def load_game_round(game_round: int) -> str:
 
 @mcp.tool()
 def append_phrase(user_name: str, phrase: str) -> str:
-    """Add a word and save the result."""
+    """Saves the phrase and closes the session. AI responds in Korean."""
     if not game_state["is_active"]:
-        return "지시: 진행 중인 게임이 없으니 먼저 번호를 선택해달라고 한국어로 말하세요."
+        return "Status: Inactive. Instruction: 게임이 시작되지 않았으니 번호를 먼저 골라달라고 한국어로 말하세요."
 
     if any(forbidden in phrase for forbidden in game_state["forbidden_words"]):
-        return "지시: 금지어가 포함되었다고 알리고 다른 단어를 한국어로 유도하세요."
+        return "Status: Forbidden word. Instruction: 금지어('그리고', '하지만')를 썼다고 한국어로 안내하고 다시 입력받으세요."
 
     game_state["story"].append(phrase.strip())
     game_state["participants"].add(user_name)
@@ -104,13 +104,17 @@ def append_phrase(user_name: str, phrase: str) -> str:
         with open(HISTORY_FILE, "a", encoding="utf-8") as f:
             f.write(entry)
 
-        game_state["is_active"] = False
+        current_round = game_state["current_round"]
+        game_state["is_active"] = False  # 세션 종료
+
         return (
-            f"상태: 저장 성공.\n"
-            f"지시: 문장이 완성되었음을 축하하며 '{final_sentence}'를 한국어로 보여주세요."
+            f"Status: Success. Round {current_round} saved.\n"
+            f"Result Sentence: {final_sentence}\n"
+            "Instruction: 저장이 완료되었음을 한국어로 축하하고, 최종 문장을 보여준 뒤 "
+            "'기록 보여줘'를 통해 다른 이야기를 할 수 있다고 친절하게 안내하며 대화를 마치세요."
         )
     except:
-        return "상태: 저장 실패."
+        return "Status: Save Error. Instruction: 저장 실패를 한국어로 알리세요."
 
 
 def main():
