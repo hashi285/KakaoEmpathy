@@ -18,41 +18,47 @@ game_state = {
 
 
 @mcp.tool()
-def start_story_game() -> str:
-    """메뉴 안내"""
-    return "지금은 1번부터 7번까지의 이야기만 이어갈 수 있습니다. '기록 보여줘'라고 입력해 현재 내용을 확인해보세요!"
+def show_menu() -> str:
+    """Show the start guide."""
+    return (
+        "상태: 메뉴 출력 완료.\n"
+        "지시: 아래 내용을 사용자에게 다정한 한국어 말투로 전달하세요.\n"
+        "내용: 1~7번 사이의 이야기를 선택할 수 있으며, '기록 보여줘'로 목록 확인이 가능함을 안내."
+    )
 
 
 @mcp.tool()
-def view_history() -> str:
-    """기록 목록 출력 (AI가 바로 읽기 좋게 형식 단순화)"""
+def fetch_history() -> str:
+    """Retrieve logs for rounds 1-7."""
     if not os.path.exists(HISTORY_FILE):
-        return "아직 저장된 기록이 없네요."
+        return "상태: 기록 없음. 사용자에게 아직 저장된 이야기가 없다고 한국어로 말하세요."
 
     with open(HISTORY_FILE, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # 단순 텍스트로 구성
-    res = "[준비된 이야기 목록]\n\n"
+    history_text = ""
     for r in ALLOWED_ROUNDS:
         pattern = rf"게임 {r}회차.*?완성 문장:\s*(.*?)\n"
         matches = re.findall(pattern, content, re.DOTALL)
-        sentence = matches[-1].strip() if matches else "기록 없음"
-        res += f"{r}번: {sentence}\n"
+        sentence = matches[-1].strip() if matches else "비어 있음"
+        history_text += f"{r}번: {sentence}\n"
 
-    res += "\n이어가고 싶은 번호를 말씀해주세요."
-    return res
+    return (
+        f"상태: 기록 조회 성공.\n"
+        f"지시: 아래 목록을 보여주며 이어서 하고 싶은 번호를 한국어로 물어보세요.\n"
+        f"목록:\n{history_text}"
+    )
 
 
 @mcp.tool()
-def start_game_with_history(game_round: int) -> str:
-    """특정 회차 불러오기"""
+def load_game_round(game_round: int) -> str:
+    """Load a specific story round."""
     if game_round not in ALLOWED_ROUNDS:
-        return f"{game_round}번은 선택할 수 없습니다. 1~7번 사이를 골라주세요."
+        return f"지시: {game_round}번은 안 된다고 한국어로 말하고 1~7번 중에서 다시 고르게 하세요."
 
     try:
         if not os.path.exists(HISTORY_FILE):
-            return "기록 파일이 없습니다."
+            return "상태: 파일 없음."
 
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             content = f.read()
@@ -65,35 +71,46 @@ def start_game_with_history(game_round: int) -> str:
             game_state["is_active"] = True
             game_state["current_round"] = game_round
             game_state["story"] = [saved_sentence]
-            return f"{game_round}번 문장 「{saved_sentence}」 뒤에 이어질 말을 입력해주세요."
-        return f"{game_round}번 기록을 찾지 못했습니다."
-    except:
-        return "기록을 불러오는 중 오류가 발생했습니다."
+            return (
+                f"상태: {game_round}번 로드 성공.\n"
+                f"지시: 현재 문장 '{saved_sentence}'를 알려주고, 이 뒤에 올 말을 한국어로 요청하세요."
+            )
+        return "상태: 해당 회차 기록 찾을 수 없음."
+    except Exception as e:
+        return f"상태: 에러 발생. 사용자에게 잠시 후 다시 시도해달라고 한국어로 말하세요."
 
 
 @mcp.tool()
-def add_word(user_name: str, word: str) -> str:
-    """단어 추가"""
+def append_phrase(user_name: str, phrase: str) -> str:
+    """Add a word and save the result."""
     if not game_state["is_active"]:
-        return "먼저 이어갈 번호를 선택해주세요."
+        return "지시: 진행 중인 게임이 없으니 먼저 번호를 선택해달라고 한국어로 말하세요."
 
-    if any(f in word for f in game_state["forbidden_words"]):
-        return "금지어가 포함되어 있습니다. 다른 단어를 사용해주세요."
+    if any(forbidden in phrase for forbidden in game_state["forbidden_words"]):
+        return "지시: 금지어가 포함되었다고 알리고 다른 단어를 한국어로 유도하세요."
 
-    game_state["story"].append(word.strip())
+    game_state["story"].append(phrase.strip())
     game_state["participants"].add(user_name)
     final_sentence = " ".join(game_state["story"])
 
     try:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        entry = f"📅 [{timestamp}] 게임 {game_state['current_round']}회차\n📝 완성 문장: {final_sentence}\n👥 참여: {user_name}\n{'━' * 30}\n"
+        entry = (
+            f"📅 [{timestamp}] 게임 {game_state['current_round']}회차\n"
+            f"📝 완성 문장: {final_sentence}\n"
+            f"👥 참여: {user_name}\n"
+            f"{'━' * 30}\n"
+        )
         with open(HISTORY_FILE, "a", encoding="utf-8") as f:
             f.write(entry)
-    except:
-        pass
 
-    game_state["is_active"] = False
-    return f"완성되었습니다! 최종 문장: 「{final_sentence}」"
+        game_state["is_active"] = False
+        return (
+            f"상태: 저장 성공.\n"
+            f"지시: 문장이 완성되었음을 축하하며 '{final_sentence}'를 한국어로 보여주세요."
+        )
+    except:
+        return "상태: 저장 실패."
 
 
 def main():
