@@ -43,7 +43,7 @@ def save_game_result():
 
 @mcp.tool()
 def start_story_game() -> str:
-    """새로운 게임을 시작합니다 (기본 시작 구절 사용)."""
+    """게임을 시작하는 경우 게임의 규칙에 대해 설명릏 합니다."""
     game_state["is_active"] = True
     game_state["story"] = ["옛날 아주 먼 옛날,"]
     game_state["participants"] = set()
